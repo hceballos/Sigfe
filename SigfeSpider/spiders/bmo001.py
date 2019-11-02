@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import Rule
-from scrapy.selector import HtmlXPathSelector
+from scrapy.selector import Selector
 from scrapy.http import FormRequest
 from urllib.parse import urlencode
 import scrapy
