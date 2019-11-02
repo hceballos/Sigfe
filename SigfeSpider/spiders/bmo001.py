@@ -5,6 +5,7 @@ from scrapy.selector import Selector
 from scrapy.http import FormRequest
 from urllib.parse import urlencode
 import scrapy
+import os
 import re
 import requests
 import json
@@ -13,6 +14,9 @@ from ..items import SigfespiderItem
 
 
 class SigfeSpiderSpider(scrapy.Spider):
+
+    SIGFE_USERNAME = os.environ['SIGFE_USERNAME']
+    SIGFE_PASSWORD = os.environ['SIGFE_PASSWORD']
 
     def obtener_monto(self, monto):
         return re.findall('(?<="><nobr>).*?(?=<\/nobr>)',monto)
@@ -36,7 +40,11 @@ class SigfeSpiderSpider(scrapy.Spider):
     start_urls = [URL]
 
     def parse(self, response):
-        print(" ============================================== PARSE ============================================================ ")   
+        print(self.SIGFE_USERNAME)
+        print(type(self.SIGFE_USERNAME))
+        print(self.SIGFE_PASSWORD)
+        print(type(self.SIGFE_PASSWORD))
+        print(" ============================================== PARSE ============================================================ ")
         if len(response.xpath('//html').re(r"2008, Oracle and")) == 1:
             return scrapy.Request(
                 url = response.url + '?_afrWindowMode=0&_afrLoop=' + response.xpath('//html').re(r"_afrLoop=(\d+)")[0],
@@ -61,7 +69,7 @@ class SigfeSpiderSpider(scrapy.Spider):
         if response.xpath('//*[@id="cmdLSC"]/text()').extract_first() == 'Cerrar Sesion Activa':
             print("   >>>>>>>>>>>>>>>>>>>>>>> ESTADO :", response.xpath('//*[@id="cmdLSC"]/text()').extract_first().upper(), "<<<<<<<<<<<<<<<<<<<<<<<" )
             return scrapy.FormRequest.from_response(
-                response, 
+                response,
                 url = 'https://www.sigfe.gob.cl/sigfe/faces/errorAutenticacion?error=used_user;1494;Pefernandez',
                 formdata = {
                     '_adf.ctrl-state': re.findall(r'ctrl-state=(.+)', response.url)[0],
@@ -73,14 +81,14 @@ class SigfeSpiderSpider(scrapy.Spider):
         print("   >>>>>>>>>>>>>>>>>>>>>>> ESTADO :", re.search('(?<=<strong>).*?(?=<\/strong>)', response.text)[0].upper(), "<<<<<<<<<<<<<<<<<<<<<<<" )
         print("   >>>>>>>>>>>>>>>>>>>>>>> ESTADO :", re.search('(?<=<\/strong>).*?(?=<\/p><p>)', response.text)[0].upper(), "<<<<<<<<<<<<<<<<<<<<<<<" )
         return scrapy.FormRequest.from_response(
-            response, 
+            response,
             formdata = {'event'                 : 'idPgTpl:j_id43',
                         'event.idPgTpl:j_id43'  : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'},
             callback= self.consulta)
 
     def consulta(self, response):
         return scrapy.FormRequest.from_response(
-            response, 
+            response,
             formdata = {'idTmpB:idSeonraOpcionBusqueda'                         : '0' ,
                         'idTmpB:filtroEjercicioId'                              : '10' ,
                         'org.apache.myfaces.trinidad.faces.FORM'                : 'idTmpB:idFormBuscarVariacion',
@@ -101,37 +109,55 @@ class SigfeSpiderSpider(scrapy.Spider):
 
 
         filas= response.xpath('//html').re(r'(?<=_afrrk=").*?(?=Historial de Ajustes)')
-        print(">>>>>>>>>>>>> ",filas)
 
         for linea in filas: #OK
-            yield scrapy.FormRequest.from_response(response,  
-                meta={'numero': re.findall('(?<="idTmpB:tRes:).(?=:idCmlIrVisualizar)',linea)[0] }, 
-                dont_filter=True,
-                formdata = {'Request URL': response.url,
-                            'idTmpB:idSeonraOpcionBusqueda':'0',
-                            'idTmpB:filtroEjercicioId': '10',
-                            'org.apache.myfaces.trinidad.faces.FORM': 'idTmpB:idFormBuscarVariacion',
-                            'oracle.adf.view.rich.DELTAS': '{VisualizaVariacionPopup:idPopVisualizaVariacion={_shown=},idTmpB:tRes={selectedRowKeys='+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+'}}',
-                            'event': 'idTmpB:tRes:'+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+':idCmlIrVisualizar',
-                            'event.'+'idTmpB:tRes:'+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+':idCmlIrVisualizar' : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'})
-
-            yield scrapy.FormRequest.from_response(
-                response,  
-                meta={'numero': (re.findall('(?<="idTmpB:tRes:).(?=:idCmlIrVisualizar)',linea)[0]), 'linea': linea },
-                dont_filter=True,
-                formdata = {'Request URL': response.url,
-                            'Adf-Rich-Message': 'true',
-                            'event': 'VisualizaVariacionPopup:idPopVisualizaVariacion',
-                            'event.VisualizaVariacionPopup:idPopVisualizaVariacion': '<m xmlns="http://oracle.com/richClient/comm"><k v="suppressMessageClear"><s>true</s></k><k v="type"><s>fetch</s></k></m>'},
-                callback=self.modal) 
-
-
-
+            yield self.cb1(response, linea)
             print("FormRequest : ", str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0]) )
 
         print(">>>>>>>>", 'https://www.sigfe.gob.cl/sigfe/faces/task-flow-variacion-busqueda/busquedaVariacionPresupuestaria?_adf.ctrl-state='+re.findall(r'ctrl-state=(.+)', response.url)[0]  )
         print(">>>>>>>>", 'javax.faces.ViewState', response.xpath('//html').re(r'ViewState" value="(\S+)["]')[0]  )
         #
+
+    def cb1(self, response, linea):
+        print('<<<<<<cb1')
+        return scrapy.FormRequest.from_response(response,
+            meta={
+                'numero': re.findall(
+                    '(?<="idTmpB:tRes:).(?=:idCmlIrVisualizar)',
+                    linea
+                )[0],
+                'linea': linea
+            },
+            dont_filter=True,
+            formdata = {'Request URL': response.url,
+                        'idTmpB:idSeonraOpcionBusqueda':'0',
+                        'idTmpB:filtroEjercicioId': '10',
+                        'org.apache.myfaces.trinidad.faces.FORM': 'idTmpB:idFormBuscarVariacion',
+                        'oracle.adf.view.rich.DELTAS': '{VisualizaVariacionPopup:idPopVisualizaVariacion={_shown=},idTmpB:tRes={selectedRowKeys='+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+'}}',
+                        'event': 'idTmpB:tRes:'+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+':idCmlIrVisualizar',
+                        'event.'+'idTmpB:tRes:'+str(re.findall('.(?=:idCmlIrVisualizar)',linea)[0])+':idCmlIrVisualizar' : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'},
+            callback=self.cb2)
+
+    def cb2(self, response):
+        print('<<<<<<cb2')
+        linea = response.meta.get('linea')
+        return scrapy.FormRequest.from_response(
+            response,
+            meta={
+                'numero': (
+                    re.findall(
+                        '(?<="idTmpB:tRes:).(?=:idCmlIrVisualizar)',
+                        linea
+                    )[0]
+                ),
+                'linea': linea
+            },
+            dont_filter=True,
+            formdata = {'Request URL': response.url,
+                        'Adf-Rich-Message': 'true',
+                        'event': 'VisualizaVariacionPopup:idPopVisualizaVariacion',
+                        'event.VisualizaVariacionPopup:idPopVisualizaVariacion': '<m xmlns="http://oracle.com/richClient/comm"><k v="suppressMessageClear"><s>true</s></k><k v="type"><s>fetch</s></k></m>'},
+            callback=self.modal)
 
     def modal(self, response):
         print("modal :", str(re.findall('.(?=:idCmlIrVisualizar)',response.meta.get('linea'))[0])    )
@@ -140,7 +166,7 @@ class SigfeSpiderSpider(scrapy.Spider):
         with open(filename, 'wb') as f:
             f.write(response.body)
         self.log('Saved file %s' % filename)
-       
+
         for concepto in re.findall('(?<=variacion generar componenteConceptoPresupuestarioVariacion conceptoPresupuestario texto).*?(?=<\/td><\/tr><\/tbody><\/table>)',response.text ):
             item = SigfespiderItem()
             item["Concepto_Presupuestario"] = re.findall('(?<=af_commandLink p_AFDisabled">).*?(?=<\/a><div><\/div><div><\/div><\/div><div )',concepto)[0]
@@ -154,4 +180,3 @@ class SigfeSpiderSpider(scrapy.Spider):
             item["Moneda"]                  = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',response.meta.get('linea'))[4]
             item["Monto"]                   = self.obtener_monto(response.meta.get('linea'))[5]
             yield item
-
