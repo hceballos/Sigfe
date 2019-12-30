@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from scrapy.linkextractors import LinkExtractor
-from scrapy.spiders import Rule
+from scrapy.spiders import CrawlSpider, Rule
 from scrapy.selector import Selector
 from scrapy.http import FormRequest
 from urllib.parse import urlencode
@@ -35,6 +35,8 @@ class SigfeSpiderSpider(scrapy.Spider):
     name = 'bmoDevengo001'
     start_urls = [URL]
 
+    rules = (Rule(LinkExtractor(allow=(), restrict_xpaths=('//a[@class="button next"]',)), callback="parse_page", follow= True),)
+
     def parse(self, response):
         if len(response.xpath('//html').re(r"2008, Oracle and")) == 1:
             return scrapy.Request(
@@ -46,8 +48,8 @@ class SigfeSpiderSpider(scrapy.Spider):
             return scrapy.FormRequest.from_response(
                 response,
                 formdata = {
-                    'j_username': '',
-                    'j_password': '',
+                    'j_username': 'Pefernandez',
+                    'j_password': 'Hblt2025',
                     'event': 'idCBIngresar',
                     'event.idCBIngresar': '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
                 },
@@ -83,10 +85,6 @@ class SigfeSpiderSpider(scrapy.Spider):
             )
 
 
-        #print("          >>>>>>>>>>>>>>>>>>>>>>> ESTADO :", re.search('(?<=<strong>).*?(?=<\/strong>)', response.text)[0].upper(), re.search('(?<=<\/strong>).*?(?=<\/p><p>)', response.text)[0].upper() ," <<<<<<<<<<<<<<<<<<<<<<<" )
-
-
-
         return scrapy.FormRequest.from_response(
             response,
             formdata = {
@@ -102,6 +100,7 @@ class SigfeSpiderSpider(scrapy.Spider):
             formdata = {
                 'idTmpB:idSeonraOpcionBusqueda'                         : '0' ,
                 'idTmpB:filtroEjercicioId'                              : '10' ,
+                #'idTmpB:idFolioVariacion'                               : '39823',
                 'org.apache.myfaces.trinidad.faces.FORM'                : 'idTmpB:idFormBuscarVariacion',
                 'event'                                                 : 'idTmpB:compBotonBuscarVarPresu:idCmbIrBuscar',
                 'event.idTmpB:compBotonBuscarVarPresu:idCmbIrBuscar'    : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
@@ -114,49 +113,72 @@ class SigfeSpiderSpider(scrapy.Spider):
         with open(filename, 'w') as f:
             f.write(response.text)
         self.log('Saved file %s' % filename)
-
-        filas= response.xpath('//html').re(r'(?<=_afrrk=").*?(?=Historial de Ajustes)')
-        #scrapy.shell.inspect_response(response, self)
+        print(" ------------------------------------- >>>>>>>>>>>> Tabla <<<<<<<<<<<<<<<<< ------------------------------------- ")
+        print()
         # =================================================================================================================================
+
+        # filas - Obtengo toda la linea completa
+        filas= response.xpath('//html').re(r'(?<=_afrrk=").*?(?=Historial de Ajustes)')
+        #print("=================== filas : ", filas)
         for linea in filas:
+            print(">>>>>>>>>>>>>>>>>> LINEA : ", linea)
+            # numero -Get el numero de la linea del 0 al 9
             numero = str(re.findall('(?<="idTmpB:tRes:).(?=:idCmlIrVisualizar)',linea)[0])
-            print(linea)
-            print("---------------")
+            print("numero : ", numero, type(numero))
+            print()
+
+        # -------------------------------------------------------------------------------------------------------------
+        print(" >>>>>>>> : 0")
+        yield scrapy.FormRequest.from_response(
+            response,
+            dont_filter = True,
+            formdata = {
+                'Request URL': response.url,
+                'idTmpB:idSeonraOpcionBusqueda':'0',
+                'idTmpB:filtroEjercicioId': '10',
+                'org.apache.myfaces.trinidad.faces.FORM': 'idTmpB:idFormBuscarVariacion',
+                'oracle.adf.view.rich.DELTAS': '{idTmpB:tRes={rows=10,scrollTopRowKey|p=0,selectedRowKeys=0}}',
+                'event': 'idTmpB:tRes:0:idCmlIrVisualizar',
+                'event.'+'idTmpB:tRes:0:idCmlIrVisualizar' : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
+            }
+        )
+
+        yield scrapy.FormRequest.from_response(
+            response,
+            dont_filter = True,
+            formdata = {
+                'Request URL': response.url,
+                'Adf-Rich-Message': 'true',
+                'event': 'VisualizaVariacionPopup:idPopVisualizaVariacion',
+                'event.VisualizaVariacionPopup:idPopVisualizaVariacion': '<m xmlns="http://oracle.com/richClient/comm"><k v="suppressMessageClear"><s>true</s></k><k v="type"><s>fetch</s></k></m>'
+            },
+            callback = self.modal
+        )
+        # -------------------------------------------------------------------------------------------------------------
+        #scrapy.shell.inspect_response(response, self)
+
+        # 2) seguir los enlaces de pagina siguiente
+        siguiente = re.findall(r'(?<=id="idTmpB:itLink:).*?(?=:linkDinamic")', response.text)[-1:]
+        for x in siguiente:
+            print(">>>>>>>>>>>>>>>>>>>< SIGUIENTE : ", x)
+
             yield scrapy.FormRequest.from_response(
                 response,
-                meta = {
-                    'numero': numero,
-                    'linea': linea
-                },
-                dont_filter = True,
                 formdata = {
-                    'Request URL': response.url,
-                    'idTmpB:idSeonraOpcionBusqueda':'0',
+                    'idTmpB:idSeonraOpcionBusqueda': '0',
                     'idTmpB:filtroEjercicioId': '10',
                     'org.apache.myfaces.trinidad.faces.FORM': 'idTmpB:idFormBuscarVariacion',
-                    'oracle.adf.view.rich.DELTAS': '{VisualizaOtrosDocsPopup:idPopVisualizaOtrosDocs={_shown=},idTmpB:tRes={selectedRowKeys='+numero+'}}',
-                    'event': 'idTmpB:tRes:'+numero+':idCmlIrVisualizar',
-                    'event.'+'idTmpB:tRes:'+numero+':idCmlIrVisualizar' : '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
-                }
-            )
-
-            yield scrapy.FormRequest.from_response(
-                response,
-                meta = {
-                    'numero': numero,
-                    'linea' : linea
+                    'oracle.adf.view.rich.DELTAS': '{idTmpB:tRes={rows=10,scrollTopRowKey|p=0}}',
+                    'event': 'idTmpB:itLink:'+x+':linkDinamic',
+                    'event.idTmpB:itLink:'+x+':linkDinamic': '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
                 },
-                dont_filter = True,
-                formdata = {
-                    'Request URL': response.url,
-                    'Adf-Rich-Message': 'true',
-                    'event': 'VisualizaVariacionPopup:idPopVisualizaVariacion',
-                    'event.VisualizaVariacionPopup:idPopVisualizaVariacion': '<m xmlns="http://oracle.com/richClient/comm"><k v="suppressMessageClear"><s>true</s></k><k v="type"><s>fetch</s></k></m>'
-                },
-                callback = self.modal
+                callback= self.CriteriosDeBusqueda
             )
 
     def modal(self, response):
+        print('           : _adf.ctrl-state : ', re.findall(r'ctrl-state=(.+)', response.url)[0])
+        #print('           : javax.faces.ViewState : ', re.findall(r'.ViewState" value="(\S+)["]', response.text )[0] )
+
         print(" ")
         print("========================================== INICIO MODAL =================================")
         numero  = response.meta.get('numero')
@@ -167,22 +189,12 @@ class SigfeSpiderSpider(scrapy.Spider):
             f.write(response.body)
         self.log('Saved file %s' % filename)
 
-        #scrapy.shell.inspect_response(response, self)
-
-
         for concepto in re.findall('(?<=variacion generar componenteConceptoPresupuestarioVariacion conceptoPresupuestario texto).*?(?=<\/td><\/tr><\/tbody><\/table>)',response.text):
             item = SigfespiderItem()
             item["Concepto_Presupuestario"] = re.findall('(?<=af_commandLink p_AFDisabled">).*?(?=<\/a><div><\/div><div><\/div><\/div><div )',concepto)[0]
             item["Principal"]               = self.obtener_principal(response)
-            item["Monto_Documento"]         = re.findall('(?<=type="text" value=").*?(?=">)',concepto)[0]
-            item["Id"]                      = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',linea)[0]
-            item["Folio"]                   = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',linea)[1]
-            item["Ejercicio"]               = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',linea)[2]
-            item["Numero_Documento"]        = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',linea)[3]
-            item["Titulo"]                  = self.obtener_titulo(response)
-            item["Moneda"]                  = re.findall('(?<="><nobr>).*?(?=<\/nobr>)',linea)[4]
-            item["Monto"]                   = self.obtener_monto(linea)[5]
-            #item["oc"]                      = self.obtener_orden_de_compra(response)
+            item["Monto_Neto"]             = re.findall('(?<=type="text" value=").*?(?=">)',concepto)[0]
             yield item
         print("========================================== FIN MODAL =================================")
         print(" ")
+

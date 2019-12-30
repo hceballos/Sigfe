@@ -21,14 +21,8 @@ class SigfespiderPipeline(object):
         self.curr.execute("""create table sigfe(
             Concepto_Presupuestario text,
             Principal text,
-            Monto_Documento text,
-            Id text,
-            Folio text,
-            Ejercicio text,
-            Numero_Documento text,
-            Titulo text,
-            Moneda text,
-            Monto text
+
+            Monto_Neto text
             )""")
 
     def process_item(self, item, spider):
@@ -36,16 +30,11 @@ class SigfespiderPipeline(object):
         return item
 
     def store_db(self, item):
-        self.curr.execute('''INSERT into sigfe values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',(
+        self.curr.execute('''INSERT into sigfe values (?, ?, ?)''',(
             item['Concepto_Presupuestario'],
             item['Principal'],
-            item['Monto_Documento'],
-            item['Id'],
-            item['Folio'],
-            item['Ejercicio'],
-            item['Numero_Documento'],
-            item['Titulo'],
-            item['Moneda'],
-            item['Monto']
+
+            item['Monto_Neto']
+            #item['oc']
              ))
         self.conn.commit()
