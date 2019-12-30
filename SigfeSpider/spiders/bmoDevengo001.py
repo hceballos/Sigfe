@@ -48,8 +48,8 @@ class SigfeSpiderSpider(scrapy.Spider):
             return scrapy.FormRequest.from_response(
                 response,
                 formdata = {
-                    'j_username': 'Pefernandez',
-                    'j_password': 'Hblt2025',
+                    'j_username': '',
+                    'j_password': '',
                     'event': 'idCBIngresar',
                     'event.idCBIngresar': '<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>'
                 },
